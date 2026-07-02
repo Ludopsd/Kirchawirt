@@ -433,6 +433,24 @@
         </div>
       </div>
     </div>
+
+    <!-- KI RECHNUNGS-SCAN EINSTELLUNGEN -->
+    <div style="margin-top:1.5rem" id="aiScanSettings">
+      <h3 style="font-size:1rem;color:var(--primary);margin-bottom:0.85rem;font-family:'Lato',sans-serif;font-weight:900;text-transform:uppercase;letter-spacing:0.5px">🤖 KI Rechnungs-Scan</h3>
+      <div class="card">
+        <div class="fg" style="margin-bottom:0.85rem">
+          <label>Anthropic API-Key</label>
+          <input type="password" id="aiApiKey" placeholder="sk-ant-..." onchange="saveAiSettings()">
+          <div style="font-size:0.75rem;color:var(--text-light);margin-top:0.25rem">
+            ⚠️ Der Key wird direkt im Browser verwendet und ist im Seitencode sichtbar. Nicht verwenden, wenn die App-URL öffentlich geteilt wird.
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:0.75rem">
+          <input type="checkbox" id="aiScanActive" onchange="saveAiSettings()" style="width:18px;height:18px">
+          <label for="aiScanActive" style="font-weight:700;font-size:0.9rem;text-transform:none;letter-spacing:0;color:var(--text)">Rechnungs-Scan aktiviert</label>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ─── BESTELLUNG ─── -->
@@ -589,6 +607,12 @@
       <div>
         <div class="card">
           <div class="card-title">+ Neue Lieferung einbuchen</div>
+
+          <div style="background:linear-gradient(135deg,#eef5ff,#f7fbff);border:2px dashed var(--primary);border-radius:var(--radius);padding:0.85rem;margin-bottom:0.85rem;text-align:center">
+            <input type="file" id="weAiPhotoInput" accept="image/*" capture="environment" style="display:none" onchange="handleInvoicePhoto(this.files[0]);this.value=''">
+            <button class="btn btn-primary" style="width:100%" onclick="document.getElementById('weAiPhotoInput').click()">📷 Rechnung fotografieren (KI)</button>
+            <div id="weAiStatus" style="font-size:0.8rem;color:var(--text-light);margin-top:0.5rem;text-align:left"></div>
+          </div>
 
           <div class="fg">
             <label>Lieferant (optional)</label>
@@ -881,10 +905,15 @@
       <div class="fg"><label>Bestand</label><input type="number" id="invStock" min="0" value="0"></div>
       <div class="fg"><label>Mindestbestand</label><input type="number" id="invMin" min="0" value="5"></div>
     </div>
-    <div class="fg" style="margin-bottom:0">
+    <div class="fg" style="margin-bottom:0.85rem">
       <label>Einkaufspreis pro Einheit (€)</label>
       <input type="number" id="invEinkauf" min="0" step="0.01" placeholder="z.B. 0.80 für ein Pils">
       <div style="font-size:0.75rem;color:var(--text-light);margin-top:0.25rem">Wird für die Gewinnberechnung verwendet</div>
+    </div>
+    <div class="fg" style="margin-bottom:0">
+      <label>🔑 Trigger-Wörter für Rechnungs-Scan (Komma-getrennt)</label>
+      <input type="text" id="invKeywords" placeholder="z.B. Augustiner Hell, Helles 20l, Hell Fass">
+      <div style="font-size:0.75rem;color:var(--text-light);margin-top:0.25rem">Taucht eines dieser Wörter auf einer gescannten Rechnung auf, wird dieser Artikel automatisch im Wareneingang vorgeschlagen.</div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('invModal')">Abbrechen</button>
@@ -1163,7 +1192,7 @@ function onData(p) {
   if(p==='eigenverbrauch') { renderEigenverbrauch(); renderBarEigenverbrauch(); }
   if(p==='rechnungen') renderRechnungen();
   if(p==='wareneingaenge') renderWareneingangHistory();
-  if(p==='settings') { loadHappyHourSettings(); checkHappyHour(); loadMwstSettings(); }
+  if(p==='settings') { loadHappyHourSettings(); checkHappyHour(); loadMwstSettings(); loadAiSettings(); }
   if(p==='reservations') renderReservations();
   if(p==='cash') { renderCash(); renderEigenverbrauch(); }
 }
@@ -1655,7 +1684,7 @@ function renderInventory() {
     const pct=Math.min(100,Math.round(i.stock/Math.max(1,i.minStock*3)*100));
     const low=i.stock<=i.minStock;
     return `<tr>
-      <td><strong>${i.name}</strong></td>
+      <td><strong>${i.name}</strong>${i.keywords?`<div style="font-size:0.7rem;color:var(--text-light)" title="Trigger-Wörter für Rechnungs-Scan">🔑 ${i.keywords}</div>`:''}</td>
       <td><span class="${low?'stock-low':'stock-ok'}">${i.stock} ${i.unit}</span>
         <div class="stock-bar"><div class="stock-fill" style="width:${pct}%;background:${low?'var(--danger)':'#4ca830'}"></div></div></td>
       <td>${i.minStock} ${i.unit}</td>
@@ -1683,6 +1712,7 @@ function openInvModal(id) {
   document.getElementById('invStock').value=i?.stock||0;
   document.getElementById('invMin').value=i?.minStock||5;
   document.getElementById('invEinkauf').value=i?.einkaufspreis||'';
+  document.getElementById('invKeywords').value=i?.keywords||'';
   document.getElementById('invModalTitle').textContent=id?'Artikel bearbeiten':'Neuer Artikel';
   openModal('invModal');
 }
@@ -1690,7 +1720,7 @@ function openInvModal(id) {
 function saveInvItem() {
   const id=document.getElementById('invEditId').value;
   const ep = parseFloat(document.getElementById('invEinkauf').value)||0;
-  const v={name:document.getElementById('invName').value,unit:document.getElementById('invUnit').value,stock:+document.getElementById('invStock').value,minStock:+document.getElementById('invMin').value};
+  const v={name:document.getElementById('invName').value,unit:document.getElementById('invUnit').value,stock:+document.getElementById('invStock').value,minStock:+document.getElementById('invMin').value,keywords:document.getElementById('invKeywords').value.trim()};
   if(ep > 0) v.einkaufspreis = ep;
   if(!v.name) return alert('Name eingeben');
   id?write(`inventory/${id}`,v):push('inventory',v);
@@ -2879,6 +2909,24 @@ function loadMwstSettings() {
   if (a) a.checked = mwst.aktiv ?? false;
 }
 
+/* ── KI RECHNUNGS-SCAN SETTINGS ── */
+function saveAiSettings() {
+  const cfg = {
+    apiKey: document.getElementById('aiApiKey')?.value.trim() || '',
+    active: document.getElementById('aiScanActive')?.checked || false
+  };
+  write('settings/aiScan', cfg);
+  notify('KI-Einstellungen gespeichert ✓');
+}
+
+function loadAiSettings() {
+  const cfg = D.settings?.aiScan;
+  const k = document.getElementById('aiApiKey');
+  const a = document.getElementById('aiScanActive');
+  if (k) k.value = cfg?.apiKey || '';
+  if (a) a.checked = cfg?.active ?? false;
+}
+
 function calcMwst(items) {
   const mwst = D.settings?.mwst || {essen:7, getraenk:19, aktiv:false};
   let essenNetto=0, essenMwst=0, getraenkNetto=0, getraenkMwst=0;
@@ -3677,6 +3725,7 @@ function renderGewinnUebersicht() {
 
 /* ── WARENEINGANG ── */
 let weItems = []; // [{inventoryId, name, unit, qty, pricePerUnit}]
+let weAiPhotoDataUrl = null;
 
 function initWareneingang() {
   // Set today's date
@@ -3770,10 +3819,176 @@ function updateWeTotal() {
 
 function clearWeItems() {
   weItems = [];
+  weAiPhotoDataUrl = null;
   renderWeItems();
   updateWeTotal();
   document.getElementById('weRechnungNr').value = '';
   document.getElementById('weNote').value = '';
+  const statusEl = document.getElementById('weAiStatus');
+  if (statusEl) statusEl.innerHTML = '';
+}
+
+/* ── KI RECHNUNGS-SCAN (Foto → Wareneingang) ── */
+function handleInvoicePhoto(file) {
+  if (!file) return;
+  const cfg = D.settings?.aiScan;
+  const statusEl = document.getElementById('weAiStatus');
+  if (!cfg?.apiKey) {
+    alert('Bitte zuerst unter "Empfang" → "🤖 KI Rechnungs-Scan" einen API-Key hinterlegen.');
+    return;
+  }
+  statusEl.textContent = '⏳ Foto wird komprimiert…';
+  resizeImageFile(file, 1400, 0.72).then(dataUrl => {
+    weAiPhotoDataUrl = dataUrl;
+    statusEl.textContent = '🤖 KI liest die Rechnung…';
+    return callInvoiceAI(dataUrl, cfg.apiKey);
+  }).then(data => {
+    applyAiExtraction(data);
+  }).catch(err => {
+    console.error(err);
+    statusEl.textContent = '❌ ' + (err.message || 'KI-Erkennung fehlgeschlagen');
+  });
+}
+
+function resizeImageFile(file, maxDim, quality) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const scale = maxDim / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => reject(new Error('Foto konnte nicht gelesen werden'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('Foto konnte nicht gelesen werden'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function callInvoiceAI(dataUrl, apiKey) {
+  const base64 = dataUrl.split(',')[1];
+  const prompt = `Du analysierst das Foto einer Rechnung oder eines Lieferscheins für einen Gastronomiebetrieb (Wirtshaus).
+Antworte AUSSCHLIESSLICH mit einem JSON-Objekt (kein Markdown, kein Fließtext davor oder danach) in genau diesem Format:
+{
+  "richtung": "ausgang" oder "eingang",
+  "lieferant": "Name oder null",
+  "rechnungsnummer": "... oder null",
+  "datum": "YYYY-MM-DD oder null",
+  "gesamtbetragBrutto": Zahl oder null,
+  "mwstProzent": Zahl oder null,
+  "zahlungshinweis": "bar" oder "ueberweisung" oder "karte" oder "rechnung" oder null,
+  "positionen": [ { "text": "Artikeltext genau wie auf der Rechnung", "menge": Zahl oder null, "einheit": "..." oder null, "einzelpreis": Zahl oder null } ]
+}
+"richtung" ist "ausgang", wenn der Gastro-Betrieb hier Geld bezahlt (z.B. Lieferantenrechnung, Wareneinkauf) — das ist der Normalfall bei Eingangsrechnungen. "eingang" nur, wenn Geld beim Betrieb eingeht (z.B. Gutschrift, Rückerstattung, eigene Ausgangsrechnung an einen Kunden).
+Zahlen als reine Zahl mit Punkt als Dezimaltrennzeichen, ohne Währungssymbol. Wenn ein Feld nicht erkennbar ist, setze null.`;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-5',
+      max_tokens: 2000,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
+          { type: 'text', text: prompt }
+        ]
+      }]
+    })
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`KI-Anfrage fehlgeschlagen (${res.status}): ${errText.slice(0,200)}`);
+  }
+  const json = await res.json();
+  const raw = json?.content?.[0]?.text || '';
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('KI-Antwort enthielt kein auswertbares JSON');
+  return JSON.parse(match[0]);
+}
+
+function applyAiExtraction(data) {
+  const statusEl = document.getElementById('weAiStatus');
+
+  // Geldeingang statt Wareneinkauf → nicht als Wareneingang buchen, sondern Kasse-Eingang vorschlagen
+  if (data.richtung === 'eingang') {
+    statusEl.innerHTML = `🤖 Erkannt: <strong>Geldeingang</strong> (kein Wareneinkauf) — bitte im sich öffnenden Fenster prüfen und buchen.`;
+    openCashModal('in');
+    if (data.gesamtbetragBrutto) document.getElementById('cashAmt').value = data.gesamtbetragBrutto;
+    document.getElementById('cashDesc').value = [data.lieferant, data.rechnungsnummer].filter(Boolean).join(' — ');
+    return;
+  }
+
+  // Lieferant zuordnen (einfacher Textvergleich)
+  if (data.lieferant) {
+    const supplierEntry = Object.entries(D.suppliers||{}).find(([,s]) => s.name &&
+      (s.name.toLowerCase().includes(data.lieferant.toLowerCase()) || data.lieferant.toLowerCase().includes(s.name.toLowerCase())));
+    if (supplierEntry) document.getElementById('weSupplier').value = supplierEntry[0];
+  }
+
+  if (data.rechnungsnummer) document.getElementById('weRechnungNr').value = data.rechnungsnummer;
+  if (data.datum) document.getElementById('weDate').value = data.datum;
+  if (data.zahlungshinweis && ['bar','ueberweisung','karte','rechnung'].includes(data.zahlungshinweis)) {
+    document.getElementById('wePayMethod').value = data.zahlungshinweis;
+  }
+
+  // Positionen gegen Trigger-Wörter der Lagerartikel abgleichen — nur angelegte Artikel mit Treffer werden übernommen
+  const inv = Object.entries(D.inventory||{});
+  const positionen = Array.isArray(data.positionen) ? data.positionen : [];
+  const matched = [];
+  const unmatchedTexts = [];
+
+  positionen.forEach(p => {
+    const text = (p.text || '').toLowerCase();
+    if (!text) return;
+    const invMatch = inv.find(([,item]) => {
+      const keywords = (item.keywords || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+      return keywords.some(k => text.includes(k));
+    });
+    if (invMatch) {
+      matched.push({
+        inventoryId: invMatch[0],
+        name: invMatch[1].name,
+        unit: invMatch[1].unit,
+        qty: p.menge || 1,
+        pricePerUnit: p.einzelpreis || invMatch[1].einkaufspreis || 0
+      });
+    } else {
+      unmatchedTexts.push(p.text);
+    }
+  });
+
+  if (matched.length) {
+    weItems = matched;
+    renderWeItems();
+    updateWeTotal();
+  }
+
+  const parts = [];
+  parts.push(matched.length
+    ? `✅ ${matched.length} Artikel erkannt und vorausgefüllt — bitte prüfen und einbuchen.`
+    : `⚠️ Rechnung erkannt, aber keine passenden Lagerartikel gefunden. Trigger-Wörter unter "Lager" hinterlegen.`);
+  if (unmatchedTexts.length) {
+    parts.push(`<span style="color:var(--text-light)">Nicht zugeordnet: ${unmatchedTexts.join(', ')}</span>`);
+  }
+  statusEl.innerHTML = parts.join('<br>');
 }
 
 function submitWareneingang() {
@@ -3810,6 +4025,7 @@ function submitWareneingang() {
     ts: Date.now(),
     by: curUser
   };
+  if (weAiPhotoDataUrl) record.foto = weAiPhotoDataUrl;
   push('wareneingaenge', record);
 
   // 3. Book as cash outgoing (if not "auf Rechnung")
@@ -3831,7 +4047,7 @@ function submitWareneingang() {
   if (payMethod === 'rechnung' && total > 0) {
     const today = new Date().toISOString().slice(0,10);
     const faellig = new Date(); faellig.setDate(faellig.getDate()+30);
-    push('rechnungen', {
+    const rechnung = {
       lieferant: supplierName || 'Lieferant',
       betrag: total,
       nummer: rechnungNr,
@@ -3841,7 +4057,9 @@ function submitWareneingang() {
       notiz: note || `Wareneingang ${items.map(i=>i.qty+'× '+i.name).join(', ')}`,
       status: 'offen',
       createdAt: Date.now()
-    });
+    };
+    if (weAiPhotoDataUrl) rechnung.foto = weAiPhotoDataUrl;
+    push('rechnungen', rechnung);
     notify(`🚛 ${items.length} Artikel eingebucht · Rechnung über €${total.toFixed(2)} angelegt ✓`);
   } else {
     notify(`🚛 ${items.length} Artikel eingebucht${total>0?` · €${total.toFixed(2)} als Ausgang gebucht`:''} ✓`);
