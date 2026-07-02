@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getStorageAdapter } from "@/lib/storage";
+import { decodeBase64Url } from "@/lib/util/base64url";
 
 const CONTENT_TYPES: Record<string, string> = {
   ".pdf": "application/pdf",
@@ -12,7 +13,7 @@ const CONTENT_TYPES: Record<string, string> = {
 
 export async function GET(_req: Request, ctx: RouteContext<"/api/files/[key]">) {
   const { key } = await ctx.params;
-  const decodedKey = decodeURIComponent(key);
+  const decodedKey = decodeBase64Url(key);
   const ext = decodedKey.slice(decodedKey.lastIndexOf(".")).toLowerCase();
 
   try {

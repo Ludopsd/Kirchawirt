@@ -3,6 +3,8 @@ import { promises as fs } from "fs";
 import path from "path";
 import crypto from "crypto";
 import type { StorageAdapter, StoredFile } from "./index";
+import { encodeBase64Url } from "@/lib/util/base64url";
+import { guessExtension } from "./guess-extension";
 
 export class LocalDiskStorageAdapter implements StorageAdapter {
   constructor(private readonly baseDir: string) {}
@@ -22,13 +24,6 @@ export class LocalDiskStorageAdapter implements StorageAdapter {
   }
 
   urlFor(storagePath: string): string {
-    return `/api/files/${encodeURIComponent(storagePath)}`;
+    return `/api/files/${encodeBase64Url(storagePath)}`;
   }
-}
-
-function guessExtension(mimeType: string): string {
-  if (mimeType === "application/pdf") return ".pdf";
-  if (mimeType === "image/png") return ".png";
-  if (mimeType === "image/webp") return ".webp";
-  return ".jpg";
 }

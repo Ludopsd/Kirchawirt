@@ -47,6 +47,40 @@ automatisch (`docker-entrypoint.sh`). Dasselbe Image/Compose-Setup funktioniert 
 als auch On-Premise auf einem eigenen Server — es muss nichts umgebaut werden, nur die Umgebungsvariablen
 (insbesondere `DATABASE_URL`, Speicherort, SAP-Zugangsdaten) sind pro Umgebung anzupassen.
 
+## Deployment ohne Terminal (Browser only, z.B. vom Handy/Tablet aus)
+
+Für alle, die die App ausprobieren wollen, ohne einen Computer mit Terminal/Docker zur Verfügung zu haben:
+Vercel (Next.js-Hosting) + Neon (PostgreSQL) lassen sich komplett per Klick im Browser einrichten, beide
+bieten einen kostenlosen Einstiegstarif und Login per GitHub-Konto.
+
+1. **Datenbank anlegen**: auf [neon.tech](https://neon.tech) mit GitHub anmelden → neues Projekt erstellen →
+   die angezeigte Connection-String-Zeile (beginnt mit `postgresql://...`) kopieren — das wird gleich
+   `DATABASE_URL`.
+2. **Projekt auf Vercel anlegen**: auf [vercel.com](https://vercel.com) mit GitHub anmelden → "Add New… →
+   Project" → dieses Repository auswählen.
+3. **Wichtig — Root Directory setzen**: Beim Import "Root Directory" auf `invoice-ai` stellen (die App liegt
+   in einem Unterordner, nicht im Repo-Hauptverzeichnis).
+4. **Build Command überschreiben**: unter "Build and Output Settings" das Build Command auf
+   `npm run vercel-build` setzen (führt automatisch die Datenbank-Migration vor jedem Deploy aus).
+5. **Umgebungsvariablen eintragen** (Projekt-Einstellungen → Environment Variables):
+   - `DATABASE_URL` = die Connection-URL von Neon
+   - `AUTH_SECRET` = ein zufälliger langer String (z.B. mit einem Passwort-Generator erzeugen)
+   - `SETUP_TOKEN` = ein weiterer zufälliger String (nur für die einmalige Erst-Einrichtung, siehe Schritt 7)
+   - `STORAGE_DRIVER` = `vercel-blob`
+   - `SAP_CONNECTOR` = `export`
+   - `SAP_COMPANY_CODE` = `1000`
+   - `ANTHROPIC_API_KEY` = optional, nur falls schon ein Key vorhanden ist
+6. **Dateispeicher verbinden**: im Vercel-Projekt unter "Storage" einen neuen **Blob**-Store erstellen und mit
+   dem Projekt verbinden — dabei wird automatisch die Umgebungsvariable `BLOB_READ_WRITE_TOKEN` gesetzt, ohne
+   dass man selbst etwas kopieren muss. (Lokales `local`-Storage funktioniert auf Vercel nicht, da dort kein
+   dauerhaftes Dateisystem existiert — deshalb `vercel-blob` in Schritt 5.)
+7. **Deployen**, dann warten bis der Build fertig ist. Danach **einmalig** im Browser aufrufen:
+   `https://<dein-projekt>.vercel.app/api/setup?token=<SETUP_TOKEN>` — legt Admin-Login und Beispiel-
+   Stammdaten an. Anschließend `SETUP_TOKEN` aus den Umgebungsvariablen wieder entfernen und neu deployen,
+   damit diese Route nicht dauerhaft erreichbar bleibt.
+8. Unter `https://<dein-projekt>.vercel.app/login` einloggen (Login-Daten stehen auf der Seite aus Schritt 7)
+   — funktioniert in jedem Browser, auch auf dem Handy/Tablet.
+
 ## Umgebungsvariablen (siehe `.env.example`)
 
 | Variable | Zweck |
@@ -55,7 +89,8 @@ als auch On-Premise auf einem eigenen Server — es muss nichts umgebaut werden,
 | `AUTH_SECRET` | Zufälliger langer String zum Signieren der Login-Sessions (`openssl rand -base64 32`) |
 | `ANTHROPIC_API_KEY` | Claude-API-Key für die Rechnungs-Extraktion. **Fehlt er, stürzt die App nicht ab** — die Rechnung landet direkt im manuellen Prüfmodus mit einem Hinweistext, alle Felder sind dann von Hand auszufüllen. |
 | `ANTHROPIC_MODEL` | Standard `claude-sonnet-5`. Bei schwer lesbaren/handschriftlichen Rechnungen ggf. auf ein leistungsfähigeres Modell umstellen. |
-| `STORAGE_DRIVER` | Aktuell nur `local` implementiert (Dateien auf der Platte/im Docker-Volume). Ein S3-Adapter kann durch eine weitere Implementierung von `StorageAdapter` (`src/lib/storage/`) ergänzt werden. |
+| `STORAGE_DRIVER` | `local` (Dateien auf der Platte/im Docker-Volume — für Docker/On-Premise) oder `vercel-blob` (für Vercel-Deployments, siehe oben; benötigt `BLOB_READ_WRITE_TOKEN`, wird von Vercel automatisch gesetzt). Ein weiterer S3-kompatibler Adapter kann durch Implementieren von `StorageAdapter` (`src/lib/storage/`) ergänzt werden. |
+| `SETUP_TOKEN` | Nur für Deployments ohne Terminalzugriff: aktiviert `/api/setup?token=...` zum einmaligen Anlegen von Admin-Login + Beispiel-Stammdaten per Browser-Aufruf. Standardmäßig leer/deaktiviert (Route antwortet dann mit 404). |
 | `SAP_CONNECTOR` | `export` (Default, erzeugt SAP-fähige CSV-Datei, kein Live-Zugang nötig) oder `odata` (echte S/4HANA-OData-Schnittstelle, sobald Zugangsdaten vorliegen) |
 | `SAP_ODATA_BASE_URL` / `_USERNAME` / `_PASSWORD` | Nur relevant bei `SAP_CONNECTOR=odata` |
 | `SAP_COMPANY_CODE` | Buchungskreis (BUKRS), der beim Export/der Buchung mitgegeben wird |

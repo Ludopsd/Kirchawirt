@@ -7,7 +7,13 @@ const PUBLIC_PATHS = ["/login"];
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p)) || pathname.startsWith("/api/auth")) {
+  if (
+    PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||
+    pathname.startsWith("/api/auth") ||
+    // /api/setup schützt sich selbst über SETUP_TOKEN (siehe src/app/api/setup/route.ts) — wird für die
+    // einmalige Ersteinrichtung ohne Terminal (z.B. auf Vercel) bewusst ohne Login aufgerufen.
+    pathname.startsWith("/api/setup")
+  ) {
     return NextResponse.next();
   }
 
@@ -24,5 +30,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/auth).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/auth|api/setup).*)"],
 };
