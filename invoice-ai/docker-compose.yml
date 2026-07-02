@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: invoice_ai
+      POSTGRES_PASSWORD: invoice_ai
+      POSTGRES_DB: invoice_ai
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U invoice_ai"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: "postgresql://invoice_ai:invoice_ai@db:5432/invoice_ai?schema=public"
+      AUTH_SECRET: "${AUTH_SECRET:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      ANTHROPIC_MODEL: "${ANTHROPIC_MODEL:-claude-sonnet-5}"
+      STORAGE_DRIVER: "${STORAGE_DRIVER:-local}"
+      STORAGE_LOCAL_DIR: "/app/storage/invoices"
+      SAP_CONNECTOR: "${SAP_CONNECTOR:-export}"
+      SAP_ODATA_BASE_URL: "${SAP_ODATA_BASE_URL:-}"
+      SAP_ODATA_USERNAME: "${SAP_ODATA_USERNAME:-}"
+      SAP_ODATA_PASSWORD: "${SAP_ODATA_PASSWORD:-}"
+      SAP_COMPANY_CODE: "${SAP_COMPANY_CODE:-1000}"
+    volumes:
+      - invoice_storage:/app/storage
+
+volumes:
+  db_data:
+  invoice_storage:
