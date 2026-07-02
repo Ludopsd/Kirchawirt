@@ -448,10 +448,12 @@
             ⚠️ Der Key wird direkt im Browser verwendet und ist im Seitencode sichtbar. Nicht verwenden, wenn die App-URL öffentlich geteilt wird.
           </div>
         </div>
-        <div style="display:flex;align-items:center;gap:0.75rem">
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.85rem">
           <input type="checkbox" id="aiScanActive" onchange="saveAiSettings()" style="width:18px;height:18px">
           <label for="aiScanActive" style="font-weight:700;font-size:0.9rem;text-transform:none;letter-spacing:0;color:var(--text)">Rechnungs-Scan aktiviert</label>
         </div>
+        <button type="button" class="btn btn-outline btn-sm" onclick="testAiConnection()">🔌 Verbindung testen</button>
+        <div id="aiTestResult" style="font-size:0.8rem;margin-top:0.5rem"></div>
       </div>
     </div>
   </div>
@@ -2928,6 +2930,31 @@ function loadAiSettings() {
   const a = document.getElementById('aiScanActive');
   if (k) k.value = cfg?.apiKey || '';
   if (a) a.checked = cfg?.active ?? false;
+}
+
+async function testAiConnection() {
+  const resultEl = document.getElementById('aiTestResult');
+  const apiKey = document.getElementById('aiApiKey')?.value.trim();
+  if (!apiKey) { resultEl.innerHTML = '<span style="color:var(--danger)">⚠️ Bitte zuerst einen API-Key eingeben.</span>'; return; }
+  resultEl.innerHTML = '⏳ Teste Verbindung…';
+  try {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify({ contents: [{ parts: [{ text: 'Antworte nur mit dem Wort OK.' }] }] })
+    });
+    if (res.ok) {
+      resultEl.innerHTML = '<span style="color:#2e7d32">✅ Verbindung erfolgreich — der Key funktioniert.</span>';
+    } else {
+      const errText = await res.text().catch(() => '');
+      let hint = '';
+      if (res.status === 400 || res.status === 403) hint = ' (Key ungültig oder falsch kopiert)';
+      if (res.status === 429) hint = ' (kostenloses Kontingent gerade aufgebraucht — später nochmal versuchen)';
+      resultEl.innerHTML = `<span style="color:var(--danger)">❌ Fehler ${res.status}${hint}<br><span style="font-size:0.72rem">${errText.slice(0,200)}</span></span>`;
+    }
+  } catch (err) {
+    resultEl.innerHTML = `<span style="color:var(--danger)">❌ Netzwerkfehler: ${err.message}</span>`;
+  }
 }
 
 function calcMwst(items) {
