@@ -439,10 +439,10 @@
       <h3 style="font-size:1rem;color:var(--primary);margin-bottom:0.85rem;font-family:'Lato',sans-serif;font-weight:900;text-transform:uppercase;letter-spacing:0.5px">🤖 KI Rechnungs-Scan</h3>
       <div class="card">
         <div class="fg" style="margin-bottom:0.85rem">
-          <label>Groq API-Key (kostenlos)</label>
-          <input type="password" id="aiApiKey" placeholder="gsk_..." onchange="saveAiSettings()">
+          <label>OpenRouter API-Key (kostenlos)</label>
+          <input type="password" id="aiApiKey" placeholder="sk-or-v1-..." onchange="saveAiSettings()">
           <div style="font-size:0.75rem;color:var(--text-light);margin-top:0.25rem">
-            Kostenlosen Key holen: <strong>console.groq.com/keys</strong> → mit E-Mail oder Google-Konto anmelden → "Create API Key". Kein Zahlungsmittel nötig, kein Kontingent-Problem wie bei Google.
+            Kostenlosen Key holen: <strong>openrouter.ai/keys</strong> → oben rechts "Sign In" → mit Google- oder GitHub-Konto anmelden (ein Klick, keine Telefonnummer nötig) → "Create Key". Kein Zahlungsmittel nötig.
           </div>
           <div style="font-size:0.75rem;color:var(--text-light);margin-top:0.25rem">
             ⚠️ Der Key wird direkt im Browser verwendet und ist im Seitencode sichtbar. Nicht verwenden, wenn die App-URL öffentlich geteilt wird.
@@ -2940,11 +2940,11 @@ async function testAiConnection() {
   if (!apiKey) { resultEl.innerHTML = '<span style="color:var(--danger)">⚠️ Bitte zuerst einen API-Key eingeben.</span>'; return; }
   resultEl.innerHTML = '⏳ Teste Verbindung…';
   try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        model: 'meta-llama/llama-3.2-11b-vision-instruct:free',
         messages: [{ role: 'user', content: 'Antworte nur mit dem Wort OK.' }],
         max_tokens: 10
       })
@@ -3927,14 +3927,16 @@ Antworte AUSSCHLIESSLICH mit einem JSON-Objekt (kein Markdown, kein Fließtext d
 "richtung" ist "ausgang", wenn der Gastro-Betrieb hier Geld bezahlt (z.B. Lieferantenrechnung, Wareneinkauf) — das ist der Normalfall bei Eingangsrechnungen. "eingang" nur, wenn Geld beim Betrieb eingeht (z.B. Gutschrift, Rückerstattung, eigene Ausgangsrechnung an einen Kunden).
 Zahlen als reine Zahl mit Punkt als Dezimaltrennzeichen, ohne Währungssymbol. Wenn ein Feld nicht erkennbar ist, setze null.`;
 
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
+      'Authorization': `Bearer ${apiKey}`,
+      'HTTP-Referer': location.origin,
+      'X-Title': 'Kirchawirt Rechnungs-Scan'
     },
     body: JSON.stringify({
-      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+      model: 'meta-llama/llama-3.2-11b-vision-instruct:free',
       messages: [{
         role: 'user',
         content: [
@@ -3942,7 +3944,6 @@ Zahlen als reine Zahl mit Punkt als Dezimaltrennzeichen, ohne Währungssymbol. W
           { type: 'image_url', image_url: { url: dataUrl } }
         ]
       }],
-      response_format: { type: 'json_object' },
       max_tokens: 2000
     })
   });
