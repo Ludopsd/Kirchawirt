@@ -439,8 +439,11 @@
       <h3 style="font-size:1rem;color:var(--primary);margin-bottom:0.85rem;font-family:'Lato',sans-serif;font-weight:900;text-transform:uppercase;letter-spacing:0.5px">🤖 KI Rechnungs-Scan</h3>
       <div class="card">
         <div class="fg" style="margin-bottom:0.85rem">
-          <label>Anthropic API-Key</label>
-          <input type="password" id="aiApiKey" placeholder="sk-ant-..." onchange="saveAiSettings()">
+          <label>Google Gemini API-Key (kostenlos)</label>
+          <input type="password" id="aiApiKey" placeholder="AIzaSy..." onchange="saveAiSettings()">
+          <div style="font-size:0.75rem;color:var(--text-light);margin-top:0.25rem">
+            Kostenlosen Key holen: <strong>aistudio.google.com</strong> → mit Google-Konto anmelden → "Get API key" → "Create API key". Kein Zahlungsmittel nötig, kostenloses Kontingent reicht für den täglichen Rechnungs-Scan locker aus.
+          </div>
           <div style="font-size:0.75rem;color:var(--text-light);margin-top:0.25rem">
             ⚠️ Der Key wird direkt im Browser verwendet und ist im Seitencode sichtbar. Nicht verwenden, wenn die App-URL öffentlich geteilt wird.
           </div>
@@ -3892,24 +3895,20 @@ Antworte AUSSCHLIESSLICH mit einem JSON-Objekt (kein Markdown, kein Fließtext d
 "richtung" ist "ausgang", wenn der Gastro-Betrieb hier Geld bezahlt (z.B. Lieferantenrechnung, Wareneinkauf) — das ist der Normalfall bei Eingangsrechnungen. "eingang" nur, wenn Geld beim Betrieb eingeht (z.B. Gutschrift, Rückerstattung, eigene Ausgangsrechnung an einen Kunden).
 Zahlen als reine Zahl mit Punkt als Dezimaltrennzeichen, ohne Währungssymbol. Wenn ein Feld nicht erkennbar ist, setze null.`;
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
+      'x-goog-api-key': apiKey
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-5',
-      max_tokens: 2000,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
-          { type: 'text', text: prompt }
+      contents: [{
+        parts: [
+          { text: prompt },
+          { inline_data: { mime_type: 'image/jpeg', data: base64 } }
         ]
-      }]
+      }],
+      generationConfig: { responseMimeType: 'application/json' }
     })
   });
 
@@ -3918,7 +3917,7 @@ Zahlen als reine Zahl mit Punkt als Dezimaltrennzeichen, ohne Währungssymbol. W
     throw new Error(`KI-Anfrage fehlgeschlagen (${res.status}): ${errText.slice(0,200)}`);
   }
   const json = await res.json();
-  const raw = json?.content?.[0]?.text || '';
+  const raw = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('KI-Antwort enthielt kein auswertbares JSON');
   return JSON.parse(match[0]);
