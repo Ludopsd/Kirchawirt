@@ -439,10 +439,10 @@
       <h3 style="font-size:1rem;color:var(--primary);margin-bottom:0.85rem;font-family:'Lato',sans-serif;font-weight:900;text-transform:uppercase;letter-spacing:0.5px">🤖 KI Rechnungs-Scan</h3>
       <div class="card">
         <div class="fg" style="margin-bottom:0.85rem">
-          <label>Google Gemini API-Key (kostenlos)</label>
-          <input type="password" id="aiApiKey" placeholder="AIzaSy..." onchange="saveAiSettings()">
+          <label>Groq API-Key (kostenlos)</label>
+          <input type="password" id="aiApiKey" placeholder="gsk_..." onchange="saveAiSettings()">
           <div style="font-size:0.75rem;color:var(--text-light);margin-top:0.25rem">
-            Kostenlosen Key holen: <strong>aistudio.google.com</strong> → mit Google-Konto anmelden → "Get API key" → "Create API key". Kein Zahlungsmittel nötig, kostenloses Kontingent reicht für den täglichen Rechnungs-Scan locker aus.
+            Kostenlosen Key holen: <strong>console.groq.com/keys</strong> → mit E-Mail oder Google-Konto anmelden → "Create API Key". Kein Zahlungsmittel nötig, kein Kontingent-Problem wie bei Google.
           </div>
           <div style="font-size:0.75rem;color:var(--text-light);margin-top:0.25rem">
             ⚠️ Der Key wird direkt im Browser verwendet und ist im Seitencode sichtbar. Nicht verwenden, wenn die App-URL öffentlich geteilt wird.
@@ -2940,18 +2940,22 @@ async function testAiConnection() {
   if (!apiKey) { resultEl.innerHTML = '<span style="color:var(--danger)">⚠️ Bitte zuerst einen API-Key eingeben.</span>'; return; }
   resultEl.innerHTML = '⏳ Teste Verbindung…';
   try {
-    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent', {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify({ contents: [{ parts: [{ text: 'Antworte nur mit dem Wort OK.' }] }] })
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        messages: [{ role: 'user', content: 'Antworte nur mit dem Wort OK.' }],
+        max_tokens: 10
+      })
     });
     if (res.ok) {
       resultEl.innerHTML = '<span style="color:#2e7d32">✅ Verbindung erfolgreich — der Key funktioniert.</span>';
     } else {
       const errText = await res.text().catch(() => '');
       let hint = '';
-      if (res.status === 400 || res.status === 403) hint = ' (Key ungültig oder falsch kopiert)';
-      if (res.status === 429) hint = ' (kostenloses Kontingent gerade aufgebraucht — später nochmal versuchen)';
+      if (res.status === 401 || res.status === 403) hint = ' (Key ungültig oder falsch kopiert)';
+      if (res.status === 429) hint = ' (Kontingent gerade aufgebraucht — später nochmal versuchen)';
       resultEl.innerHTML = `<span style="color:var(--danger)">❌ Fehler ${res.status}${hint}<br><span style="font-size:0.72rem">${errText.slice(0,200)}</span></span>`;
     }
   } catch (err) {
@@ -3908,7 +3912,6 @@ function resizeImageFile(file, maxDim, quality) {
 }
 
 async function callInvoiceAI(dataUrl, apiKey) {
-  const base64 = dataUrl.split(',')[1];
   const prompt = `Du analysierst das Foto einer Rechnung oder eines Lieferscheins für einen Gastronomiebetrieb (Wirtshaus).
 Antworte AUSSCHLIESSLICH mit einem JSON-Objekt (kein Markdown, kein Fließtext davor oder danach) in genau diesem Format:
 {
@@ -3924,20 +3927,23 @@ Antworte AUSSCHLIESSLICH mit einem JSON-Objekt (kein Markdown, kein Fließtext d
 "richtung" ist "ausgang", wenn der Gastro-Betrieb hier Geld bezahlt (z.B. Lieferantenrechnung, Wareneinkauf) — das ist der Normalfall bei Eingangsrechnungen. "eingang" nur, wenn Geld beim Betrieb eingeht (z.B. Gutschrift, Rückerstattung, eigene Ausgangsrechnung an einen Kunden).
 Zahlen als reine Zahl mit Punkt als Dezimaltrennzeichen, ohne Währungssymbol. Wenn ein Feld nicht erkennbar ist, setze null.`;
 
-  const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent', {
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-goog-api-key': apiKey
+      'Authorization': `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      contents: [{
-        parts: [
-          { text: prompt },
-          { inline_data: { mime_type: 'image/jpeg', data: base64 } }
+      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: dataUrl } }
         ]
       }],
-      generationConfig: { responseMimeType: 'application/json' }
+      response_format: { type: 'json_object' },
+      max_tokens: 2000
     })
   });
 
@@ -3946,7 +3952,7 @@ Zahlen als reine Zahl mit Punkt als Dezimaltrennzeichen, ohne Währungssymbol. W
     throw new Error(`KI-Anfrage fehlgeschlagen (${res.status}): ${errText.slice(0,200)}`);
   }
   const json = await res.json();
-  const raw = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const raw = json?.choices?.[0]?.message?.content || '';
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('KI-Antwort enthielt kein auswertbares JSON');
   return JSON.parse(match[0]);
